@@ -1,0 +1,787 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>あみだくじ 順番決め</title>
+<style>
+  :root {
+    --bg: #f6f9fc;
+    --card: #ffffff;
+    --ink: #1f2a37;
+    --sub: #5b6876;
+    --line: #b9c3cf;
+    --accent: #0f8f8a;
+    --accent-dark: #0b6f6b;
+    --warn-bg: #fff4d6;
+    --warn-ink: #7a5200;
+    --err: #c62828;
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: "Hiragino Kaku Gothic ProN", "Hiragino Sans", "Yu Gothic", "Meiryo", "Noto Sans JP", sans-serif;
+    font-size: 20px;
+    line-height: 1.6;
+  }
+  main { max-width: 1400px; margin: 0 auto; padding: 16px; }
+  h1 { font-size: 34px; margin: 8px 0 16px; text-align: center; letter-spacing: 0.05em; }
+  h2 { font-size: 28px; margin: 0 0 12px; }
+  .card {
+    background: var(--card);
+    border-radius: 16px;
+    padding: 20px;
+    box-shadow: 0 2px 10px rgba(31, 42, 55, 0.08);
+  }
+  #screen-input { max-width: 640px; margin: 0 auto; }
+  label { display: block; font-weight: 700; margin-bottom: 8px; }
+  textarea {
+    width: 100%;
+    min-height: 320px;
+    font: inherit;
+    font-size: 22px;
+    line-height: 1.5;
+    padding: 12px 14px;
+    border: 2px solid var(--line);
+    border-radius: 12px;
+    resize: vertical;
+    color: var(--ink);
+    background: #fff;
+  }
+  textarea:focus { outline: 3px solid rgba(15, 143, 138, 0.35); border-color: var(--accent); }
+  #count { margin: 8px 0 0; color: var(--sub); font-weight: 700; }
+  .msg { margin: 8px 0 0; font-weight: 700; min-height: 1.6em; }
+  .msg.error { color: var(--err); }
+  .notice {
+    background: var(--warn-bg);
+    color: var(--warn-ink);
+    border-radius: 10px;
+    padding: 8px 14px;
+    margin: 0 0 12px;
+    font-size: 18px;
+    font-weight: 700;
+  }
+  button, select {
+    font: inherit;
+    font-weight: 700;
+    font-size: 22px;
+    min-height: 56px;
+    padding: 10px 24px;
+    border-radius: 12px;
+    border: 2px solid var(--accent);
+    background: #fff;
+    color: var(--accent-dark);
+    cursor: pointer;
+  }
+  button.primary { background: var(--accent); color: #fff; }
+  button.primary:hover:not(:disabled) { background: var(--accent-dark); }
+  button:hover:not(:disabled) { background: #e6f5f4; }
+  button:disabled { opacity: 0.4; cursor: default; }
+  button:focus-visible, select:focus-visible { outline: 3px solid rgba(15, 143, 138, 0.45); outline-offset: 2px; }
+  select { padding: 10px 12px; color: var(--ink); border-color: var(--line); }
+  .wide { width: 100%; margin-top: 12px; }
+  .controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 12px;
+  }
+  .speed { display: flex; align-items: center; gap: 8px; font-weight: 700; }
+  .speed label { margin: 0; }
+  #status {
+    text-align: center;
+    font-size: 30px;
+    font-weight: 700;
+    min-height: 1.7em;
+    margin: 4px 0 8px;
+  }
+  #status .chip { padding: 2px 14px; border-radius: 999px; color: #fff; }
+  #scroller {
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    padding: 8px 0 12px;
+  }
+  #board { margin: 0 auto; position: relative; }
+  #labels, #goals { position: relative; }
+  .name {
+    position: absolute;
+    bottom: 6px;
+    transform: translateX(-50%);
+    white-space: nowrap;
+    font-weight: 700;
+    line-height: 1.15;
+    padding: 4px 6px;
+    border-radius: 8px;
+    border-bottom: 5px solid var(--c);
+    background: #fff;
+    transition: background 0.2s, color 0.2s;
+  }
+  .name.vertical {
+    writing-mode: vertical-rl;
+    text-orientation: upright;
+    border-bottom: none;
+    border-left: 5px solid var(--c);
+    padding: 6px 4px;
+  }
+  .name.active, .name.done { background: var(--c); color: #fff; }
+  .goal {
+    position: absolute;
+    top: 6px;
+    transform: translateX(-50%);
+    height: 46px;
+    border-radius: 23px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 22px;
+    background: #e3e8ee;
+    color: var(--sub);
+    border: 2px solid var(--line);
+  }
+  .goal.open { background: var(--c); border-color: var(--c); color: #fff; animation: pop 0.35s ease-out; }
+  @keyframes pop {
+    0% { transform: translateX(-50%) scale(0.5); }
+    70% { transform: translateX(-50%) scale(1.25); }
+    100% { transform: translateX(-50%) scale(1); }
+  }
+  svg { display: block; }
+  #results { margin-top: 16px; }
+  #result-list {
+    list-style: none;
+    margin: 0 0 16px;
+    padding: 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+    gap: 8px 16px;
+  }
+  #result-list li {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 26px;
+    font-weight: 700;
+    padding: 6px 12px;
+    border-radius: 10px;
+    background: #f1f5f9;
+    border-left: 8px solid var(--c);
+    overflow-wrap: anywhere;
+  }
+  #result-list .num { color: var(--sub); white-space: nowrap; min-width: 3em; }
+  #copy-msg { text-align: center; }
+  @media (max-width: 600px) {
+    body { font-size: 18px; }
+    main { padding: 10px; }
+    h1 { font-size: 26px; }
+    h2 { font-size: 24px; }
+    .card { padding: 14px; }
+    button, select { font-size: 20px; padding: 10px 16px; }
+    #status { font-size: 24px; }
+    #result-list li { font-size: 22px; }
+    .controls button { flex: 1 1 100%; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .goal.open { animation: none; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <h1>あみだくじ 順番決め</h1>
+
+  <!-- 1. 入力画面 -->
+  <section id="screen-input" class="card">
+    <label for="names">参加者の名前（1行に1人ずつ）</label>
+    <textarea id="names" placeholder="佐藤&#10;田中&#10;鈴木" autocomplete="off" spellcheck="false"></textarea>
+    <p id="count">いま 0人</p>
+    <p id="input-msg" class="msg error" role="alert"></p>
+    <button id="btn-make" class="primary wide" type="button">あみだくじを作る</button>
+  </section>
+
+  <!-- 2. あみだくじ画面 -->
+  <section id="screen-amida" hidden>
+    <div class="card">
+      <p id="notice" class="notice" hidden></p>
+      <div class="controls">
+        <button id="btn-start" class="primary" type="button">スタート</button>
+        <button id="btn-all" type="button">全員一気に表示</button>
+        <span class="speed">
+          <label for="speed">速さ</label>
+          <select id="speed">
+            <option value="240">ゆっくり</option>
+            <option value="460" selected>ふつう</option>
+            <option value="1000">はやい</option>
+          </select>
+        </span>
+        <button id="btn-edit-top" type="button">メンバーを変更</button>
+      </div>
+      <p id="status" aria-live="polite"></p>
+      <div id="scroller">
+        <div id="board">
+          <div id="labels"></div>
+          <svg id="svg" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="あみだくじ"></svg>
+          <div id="goals"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 3. 結果表示 -->
+    <section id="results" class="card" hidden>
+      <h2>結果</h2>
+      <ul id="result-list"></ul>
+      <div class="controls">
+        <button id="btn-copy" class="primary" type="button">結果をコピー</button>
+        <button id="btn-retry" type="button">もう一度（同じメンバー）</button>
+        <button id="btn-edit" type="button">メンバーを変更</button>
+      </div>
+      <p id="copy-msg" class="msg" aria-live="polite"></p>
+    </section>
+  </section>
+</main>
+
+<script>
+"use strict";
+
+// ==== LOGIC START ====（画面に依存しない部分）
+
+var MIN_PEOPLE = 2;
+var MAX_PEOPLE = 40;
+var BASE_ROWS = 14;
+
+// 0 以上 max 未満の整数を偏りなく返す（crypto.getRandomValues を使用）
+function randInt(max) {
+  if (max <= 1) return 0;
+  var limit = Math.floor(0x100000000 / max) * max;
+  var buf = new Uint32Array(1);
+  do { crypto.getRandomValues(buf); } while (buf[0] >= limit);
+  return buf[0] % max;
+}
+
+function shuffle(arr) {
+  for (var i = arr.length - 1; i > 0; i--) {
+    var j = randInt(i + 1);
+    var t = arr[i]; arr[i] = arr[j]; arr[j] = t;
+  }
+  return arr;
+}
+
+// 入力テキストを名前の配列にする。空行と前後のスペースを取り除き、
+// 同じ名前には (2), (3)… を付けて区別する。
+function parseNames(text) {
+  var raw = text.split(/\r?\n/).map(function (s) {
+    return s.replace(/^[\s　]+|[\s　]+$/g, "");
+  }).filter(function (s) { return s.length > 0; });
+
+  var used = Object.create(null);
+  var counts = Object.create(null);
+  raw.forEach(function (n) { used[n] = true; });
+  var renamed = [];
+  var names = raw.map(function (n) {
+    if (!counts[n]) { counts[n] = 1; return n; }
+    var candidate;
+    do {
+      counts[n]++;
+      candidate = n + "(" + counts[n] + ")";
+    } while (used[candidate]);
+    used[candidate] = true;
+    if (renamed.indexOf(n) === -1) renamed.push(n);
+    return candidate;
+  });
+  return { names: names, duplicated: renamed };
+}
+
+// あみだくじを作る。
+// rungs[r][g] が true なら、r 段目の「g 本目と g+1 本目の縦線の間」に横線がある。
+function generateAmida(n) {
+  var gaps = n - 1;
+  var rungs = [];
+  var jitter = [];
+  var total = 0;
+
+  function addRow() {
+    var row = [], jit = [];
+    for (var g = 0; g < gaps; g++) {
+      row.push(false);
+      jit.push((randInt(61) - 30) / 100); // 高さを少しだけずらして見やすくする
+    }
+    rungs.push(row);
+    jitter.push(jit);
+  }
+  // 同じ段で横線が隣り合わないかを確かめる
+  function canPlace(r, g) {
+    if (rungs[r][g]) return false;
+    if (g > 0 && rungs[r][g - 1]) return false;
+    if (g < gaps - 1 && rungs[r][g + 1]) return false;
+    return true;
+  }
+  function place(r, g) { rungs[r][g] = true; total++; }
+
+  for (var i = 0; i < BASE_ROWS; i++) addRow();
+
+  // まずランダムに置く
+  for (var r = 0; r < rungs.length; r++) {
+    for (var g = 0; g < gaps; g++) {
+      if (randInt(100) < 45 && canPlace(r, g)) place(r, g);
+    }
+  }
+
+  // どの縦線の間にも最低2本は横線があるようにする
+  for (var g2 = 0; g2 < gaps; g2++) {
+    var have = 0;
+    for (var r2 = 0; r2 < rungs.length; r2++) if (rungs[r2][g2]) have++;
+    while (have < 2) {
+      var free = [];
+      for (var r3 = 0; r3 < rungs.length; r3++) if (canPlace(r3, g2)) free.push(r3);
+      if (free.length === 0) { addRow(); continue; }
+      place(free[randInt(free.length)], g2);
+      have++;
+    }
+  }
+
+  // 横線の合計が 人数×3本 以上になるまで足す
+  var target = Math.max(n * 3, 6);
+  while (total < target) {
+    var cand = [];
+    for (var r4 = 0; r4 < rungs.length; r4++) {
+      for (var g4 = 0; g4 < gaps; g4++) if (canPlace(r4, g4)) cand.push([r4, g4]);
+    }
+    if (cand.length === 0) { addRow(); continue; }
+    var pick = cand[randInt(cand.length)];
+    place(pick[0], pick[1]);
+  }
+
+  // 下の番号もシャッフルしておく（横線が少なくても偏らないように）
+  var bottom = [];
+  for (var k = 1; k <= n; k++) bottom.push(k);
+  shuffle(bottom);
+
+  return { n: n, rows: rungs.length, rungs: rungs, jitter: jitter, bottom: bottom, rungCount: total };
+}
+
+// start 本目の縦線から下までたどる。アニメーションも結果もこの道筋だけを使う。
+function tracePath(amida, start) {
+  var col = start;
+  var steps = [];
+  for (var r = 0; r < amida.rows; r++) {
+    if (col < amida.n - 1 && amida.rungs[r][col]) {
+      steps.push({ row: r, gap: col, from: col, to: col + 1 });
+      col = col + 1;
+    } else if (col > 0 && amida.rungs[r][col - 1]) {
+      steps.push({ row: r, gap: col - 1, from: col, to: col - 1 });
+      col = col - 1;
+    }
+  }
+  return { start: start, steps: steps, end: col, number: amida.bottom[col] };
+}
+
+// 道筋を画面上の座標の列にする
+function pathPoints(amida, path, geo) {
+  var pts = [[geo.x(path.start), 0]];
+  path.steps.forEach(function (s) {
+    var y = geo.y(s.row, s.gap);
+    pts.push([geo.x(s.from), y]);
+    pts.push([geo.x(s.to), y]);
+  });
+  pts.push([geo.x(path.end), geo.height]);
+  return pts;
+}
+
+function makeGeometry(amida, colW) {
+  var rowH = 30, pad = 12;
+  return {
+    colW: colW,
+    width: colW * amida.n,
+    height: pad * 2 + rowH * amida.rows,
+    x: function (c) { return colW * (c + 0.5); },
+    y: function (r, g) { return pad + (r + 0.5 + amida.jitter[r][g]) * rowH; }
+  };
+}
+
+function personColor(i) {
+  var hue = Math.round((i * 137.508 + 200) % 360);
+  var light = (hue > 45 && hue < 190) ? 34 : 44; // 黄色や緑は少し暗くして読みやすくする
+  return "hsl(" + hue + ", 78%, " + light + "%)";
+}
+
+function resultLines(names, paths) {
+  return names.map(function (name, i) { return { number: paths[i].number, name: name, index: i }; })
+    .sort(function (a, b) { return a.number - b.number; });
+}
+
+// ==== LOGIC END ====
+
+(function () {
+  if (typeof document === "undefined") return;
+
+  var $ = function (id) { return document.getElementById(id); };
+  var SVG_NS = "http://www.w3.org/2000/svg";
+
+  var el = {
+    input: $("screen-input"), amidaScreen: $("screen-amida"),
+    names: $("names"), count: $("count"), inputMsg: $("input-msg"), make: $("btn-make"),
+    notice: $("notice"), start: $("btn-start"), all: $("btn-all"), speed: $("speed"),
+    status: $("status"), scroller: $("scroller"), board: $("board"),
+    labels: $("labels"), svg: $("svg"), goals: $("goals"),
+    results: $("results"), list: $("result-list"), copy: $("btn-copy"),
+    retry: $("btn-retry"), edit: $("btn-edit"), editTop: $("btn-edit-top"), copyMsg: $("copy-msg")
+  };
+
+  var state = {
+    names: [], amida: null, paths: [], colors: [], geo: null,
+    revealed: [], running: false, finished: false, runId: 0,
+    labelEls: [], goalEls: [], pathLayer: null
+  };
+
+  var measureCtx = document.createElement("canvas").getContext("2d");
+  function textWidth(text, px) {
+    measureCtx.font = "700 " + px + "px " + getComputedStyle(document.body).fontFamily;
+    return measureCtx.measureText(text).width;
+  }
+  function svgEl(tag, attrs) {
+    var e = document.createElementNS(SVG_NS, tag);
+    for (var k in attrs) e.setAttribute(k, attrs[k]);
+    return e;
+  }
+  function sleep(ms) { return new Promise(function (res) { setTimeout(res, ms); }); }
+
+  // ---------- 入力画面 ----------
+  function updateCount() {
+    var n = parseNames(el.names.value).names.length;
+    el.count.textContent = "いま " + n + "人";
+    el.inputMsg.textContent = "";
+  }
+  el.names.addEventListener("input", updateCount);
+
+  el.make.addEventListener("click", function () {
+    var parsed = parseNames(el.names.value);
+    var n = parsed.names.length;
+    if (n < MIN_PEOPLE) {
+      el.inputMsg.textContent = "名前を2人以上入力してください。";
+      return;
+    }
+    if (n > MAX_PEOPLE) {
+      el.inputMsg.textContent = "人数が多すぎます（" + MAX_PEOPLE + "人まで）。いま " + n + "人です。";
+      return;
+    }
+    state.names = parsed.names;
+    if (parsed.duplicated.length > 0) {
+      el.notice.textContent = "同じ名前があったので番号を付けて区別しました：" + parsed.duplicated.join("、");
+      el.notice.hidden = false;
+    } else {
+      el.notice.hidden = true;
+    }
+    el.input.hidden = true;
+    el.amidaScreen.hidden = false;
+    newGame();
+  });
+
+  // ---------- あみだくじ ----------
+  function newGame() {
+    var n = state.names.length;
+    state.runId++;
+    state.running = false;
+    state.finished = false;
+    state.amida = generateAmida(n);
+    state.paths = [];
+    state.colors = [];
+    state.revealed = [];
+    for (var i = 0; i < n; i++) {
+      state.paths.push(tracePath(state.amida, i));
+      state.colors.push(personColor(i));
+      state.revealed.push(false);
+    }
+    el.results.hidden = true;
+    el.copyMsg.textContent = "";
+    el.status.textContent = "「スタート」を押してください";
+    el.start.disabled = false;
+    el.all.disabled = false;
+    layout();
+    el.scroller.scrollLeft = 0;
+    window.scrollTo(0, 0);
+  }
+
+  // 画面の幅に合わせて盤面を描き直す（表示済みの線と番号はそのまま再現する）
+  function layout() {
+    var a = state.amida, n = a.n;
+    var avail = el.scroller.clientWidth;
+    var colW = Math.max(56, Math.min(150, Math.floor(avail / n)));
+    var geo = state.geo = makeGeometry(a, colW);
+
+    el.board.style.width = geo.width + "px";
+
+    // 名前ラベル：横書きで入るなら横書き、入らなければ縦書き（長い名前は省略）
+    var mode = null;
+    [22, 18].some(function (px) {
+      var fits = state.names.every(function (nm) { return textWidth(nm, px) <= colW - 16; });
+      if (fits) mode = { vertical: false, px: px };
+      return fits;
+    });
+    if (!mode) mode = { vertical: true, px: n <= 12 ? 22 : 18 };
+
+    var shown = state.names.map(function (nm) {
+      if (!mode.vertical) return nm;
+      var chars = Array.from(nm);
+      return chars.length > 8 ? chars.slice(0, 7).join("") + "…" : nm;
+    });
+    var labelH = 46;
+    if (mode.vertical) {
+      var longest = 0;
+      shown.forEach(function (s) { longest = Math.max(longest, textWidth(s, mode.px)); });
+      labelH = Math.ceil(Math.max(longest, Array.from(shown[0]).length * mode.px) + 30);
+      shown.forEach(function (s) {
+        labelH = Math.max(labelH, Math.ceil(Array.from(s).length * mode.px * 1.05) + 30);
+      });
+    }
+
+    el.labels.textContent = "";
+    el.labels.style.height = labelH + "px";
+    state.labelEls = state.names.map(function (nm, i) {
+      var d = document.createElement("div");
+      d.className = "name" + (mode.vertical ? " vertical" : "") + (state.revealed[i] ? " done" : "");
+      d.textContent = shown[i];
+      d.title = nm;
+      d.style.left = geo.x(i) + "px";
+      d.style.fontSize = mode.px + "px";
+      d.style.setProperty("--c", state.colors[i]);
+      el.labels.appendChild(d);
+      return d;
+    });
+
+    // 縦線と横線
+    var svg = el.svg;
+    svg.textContent = "";
+    svg.setAttribute("width", geo.width);
+    svg.setAttribute("height", geo.height);
+    svg.setAttribute("viewBox", "0 0 " + geo.width + " " + geo.height);
+    var base = svgEl("g", { stroke: "#b9c3cf", "stroke-width": 3, "stroke-linecap": "round" });
+    for (var c = 0; c < n; c++) {
+      base.appendChild(svgEl("line", { x1: geo.x(c), y1: 0, x2: geo.x(c), y2: geo.height }));
+    }
+    for (var r = 0; r < a.rows; r++) {
+      for (var g = 0; g < n - 1; g++) {
+        if (!a.rungs[r][g]) continue;
+        var y = geo.y(r, g);
+        base.appendChild(svgEl("line", { x1: geo.x(g), y1: y, x2: geo.x(g + 1), y2: y }));
+      }
+    }
+    svg.appendChild(base);
+    state.pathLayer = svgEl("g", { fill: "none", "stroke-width": 6, "stroke-linecap": "round", "stroke-linejoin": "round" });
+    svg.appendChild(state.pathLayer);
+
+    // 下の番号
+    el.goals.textContent = "";
+    el.goals.style.height = "60px";
+    var badgeW = Math.min(colW - 8, 52);
+    state.goalEls = [];
+    for (var c2 = 0; c2 < n; c2++) {
+      var gEl = document.createElement("div");
+      gEl.className = "goal";
+      gEl.textContent = "？";
+      gEl.style.left = geo.x(c2) + "px";
+      gEl.style.width = badgeW + "px";
+      el.goals.appendChild(gEl);
+      state.goalEls.push(gEl);
+    }
+
+    // すでに表示済みの人を描き直す
+    for (var i2 = 0; i2 < n; i2++) {
+      if (state.revealed[i2]) {
+        drawPath(i2);
+        openGoal(i2, false);
+      }
+    }
+  }
+
+  function pathD(i) {
+    var pts = pathPoints(state.amida, state.paths[i], state.geo);
+    return pts.map(function (p, k) { return (k === 0 ? "M" : "L") + p[0] + " " + p[1]; }).join(" ");
+  }
+  function drawPath(i) {
+    var p = svgEl("path", { d: pathD(i), stroke: state.colors[i] });
+    state.pathLayer.appendChild(p);
+    return p;
+  }
+  function openGoal(i, animate) {
+    var path = state.paths[i];
+    var gEl = state.goalEls[path.end];
+    gEl.textContent = String(path.number);
+    gEl.style.setProperty("--c", state.colors[i]);
+    gEl.className = "goal open";
+    if (!animate) gEl.style.animation = "none";
+  }
+  function reveal(i) {
+    state.revealed[i] = true;
+    state.labelEls[i].classList.remove("active");
+    state.labelEls[i].classList.add("done");
+    openGoal(i, true);
+  }
+  function setStatus(i, done) {
+    el.status.textContent = "";
+    var chip = document.createElement("span");
+    chip.className = "chip";
+    chip.style.background = state.colors[i];
+    chip.textContent = state.names[i];
+    el.status.appendChild(chip);
+    el.status.appendChild(document.createTextNode(done ? " さんは " + state.paths[i].number + "番！" : " さん…"));
+  }
+  function keepVisible(x) {
+    var sc = el.scroller;
+    if (sc.scrollWidth <= sc.clientWidth) return;
+    var margin = Math.min(80, sc.clientWidth / 4);
+    if (x < sc.scrollLeft + margin) sc.scrollLeft = x - margin;
+    else if (x > sc.scrollLeft + sc.clientWidth - margin) sc.scrollLeft = x - sc.clientWidth + margin;
+  }
+
+  // 1人分の線をたどるアニメーション
+  function animatePerson(i, myRun) {
+    return new Promise(function (resolve) {
+      var p = drawPath(i);
+      var total = p.getTotalLength();
+      p.setAttribute("stroke-dasharray", total + " " + total);
+      p.setAttribute("stroke-dashoffset", total);
+      var dot = svgEl("circle", { r: 9, fill: state.colors[i], stroke: "#fff", "stroke-width": 3 });
+      state.pathLayer.appendChild(dot);
+      var dist = 0, last = null;
+
+      function frame(now) {
+        if (state.runId !== myRun) { resolve(false); return; }
+        if (last === null) last = now;
+        var dt = Math.min(now - last, 100);
+        last = now;
+        dist = Math.min(total, dist + dt / 1000 * Number(el.speed.value));
+        p.setAttribute("stroke-dashoffset", total - dist);
+        var pt = p.getPointAtLength(dist);
+        dot.setAttribute("cx", pt.x);
+        dot.setAttribute("cy", pt.y);
+        keepVisible(pt.x);
+        if (dist < total) { requestAnimationFrame(frame); return; }
+        p.removeAttribute("stroke-dasharray");
+        p.removeAttribute("stroke-dashoffset");
+        dot.remove();
+        resolve(true);
+      }
+      requestAnimationFrame(frame);
+    });
+  }
+
+  async function start() {
+    if (state.running || state.finished) return;
+    var myRun = ++state.runId;
+    state.running = true;
+    el.start.disabled = true;
+    for (var i = 0; i < state.names.length; i++) {
+      if (state.revealed[i]) continue;
+      state.labelEls[i].classList.add("active");
+      setStatus(i, false);
+      keepVisible(state.geo.x(i));
+      var ok = await animatePerson(i, myRun);
+      if (!ok || state.runId !== myRun) return;
+      reveal(i);
+      setStatus(i, true);
+      await sleep(Number(el.speed.value) >= 1000 ? 250 : 600);
+      if (state.runId !== myRun) return;
+    }
+    finish();
+  }
+
+  function revealAll() {
+    if (state.finished) return;
+    state.runId++;
+    for (var i = 0; i < state.names.length; i++) state.revealed[i] = true;
+    layout();
+    finish();
+  }
+
+  function finish() {
+    state.running = false;
+    state.finished = true;
+    el.start.disabled = true;
+    el.all.disabled = true;
+    el.status.textContent = "全員の順番が決まりました！";
+    var lines = resultLines(state.names, state.paths);
+    el.list.textContent = "";
+    lines.forEach(function (ln) {
+      var li = document.createElement("li");
+      li.style.setProperty("--c", state.colors[ln.index]);
+      var num = document.createElement("span");
+      num.className = "num";
+      num.textContent = ln.number + "番";
+      var nm = document.createElement("span");
+      nm.textContent = ln.name;
+      li.appendChild(num);
+      li.appendChild(nm);
+      el.list.appendChild(li);
+    });
+    el.results.hidden = false;
+    layout(); // アニメーション中に画面幅が変わっていた場合に合わせ直す
+    el.results.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }
+
+  function resultText() {
+    return resultLines(state.names, state.paths)
+      .map(function (ln) { return ln.number + "番 " + ln.name; }).join("\n");
+  }
+
+  function copyResults() {
+    var text = resultText();
+    function ok() { el.copyMsg.textContent = "コピーしました！"; }
+    function fallback() {
+      var ta = document.createElement("textarea");
+      ta.value = text;
+      ta.setAttribute("readonly", "");
+      ta.style.position = "fixed";
+      ta.style.top = "-1000px";
+      document.body.appendChild(ta);
+      ta.select();
+      var done = false;
+      try { done = document.execCommand("copy"); } catch (e) { done = false; }
+      ta.remove();
+      el.copyMsg.textContent = done ? "コピーしました！" : "コピーできませんでした。一覧を選択してコピーしてください。";
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(ok, fallback);
+    } else {
+      fallback();
+    }
+  }
+
+  function backToInput() {
+    state.runId++;
+    state.running = false;
+    el.amidaScreen.hidden = true;
+    el.input.hidden = false;
+    window.scrollTo(0, 0);
+    el.names.focus();
+  }
+
+  el.start.addEventListener("click", start);
+  el.all.addEventListener("click", revealAll);
+  el.copy.addEventListener("click", copyResults);
+  el.retry.addEventListener("click", newGame);
+  el.edit.addEventListener("click", backToInput);
+  el.editTop.addEventListener("click", backToInput);
+
+  var resizeTimer = null;
+  window.addEventListener("resize", function () {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(function () {
+      if (el.amidaScreen.hidden || !state.amida || state.running) return;
+      layout();
+    }, 150);
+  });
+
+  // テスト用（画面の動作には影響しません）
+  window.__amida = { state: state, resultText: resultText };
+
+  updateCount();
+})();
+</script>
+</body>
+</html>
